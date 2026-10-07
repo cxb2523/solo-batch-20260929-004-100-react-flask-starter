@@ -29,6 +29,10 @@ class Application:
         for blueprint in [routes.counter, routes.localstack]:
             self.flask_app.register_blueprint(blueprint)
 
+        # Register the injectable storage service used by the /localstack
+        # routes (routes consume it via app.extensions, never a global).
+        routes.localstack.init_storage(self.flask_app)
+
         # Init Celery
         self.celery = make_celery(self.flask_app)
 

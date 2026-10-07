@@ -6,15 +6,84 @@ import {
   GridList,
   GridListTile,
   Link,
+  Paper,
+  Typography,
 } from '@material-ui/core';
 
 import localStackLogo from '../assets/images/localStackLogo.png';
+
+function StatusPanel(props) {
+  const { status } = props;
+  if (!status) {
+    return (
+      <Paper style={{ padding: '10px', marginTop: '10px' }}>
+        <Typography variant="body2">Loading storage status…</Typography>
+      </Paper>
+    );
+  }
+  const bucketState = status.bucket_probe_error
+    ? `unknown (${status.bucket_probe_error})`
+    : status.bucket_exists
+    ? 'exists'
+    : 'missing';
+  const bucketColor = status.bucket_probe_error
+    ? 'orange'
+    : status.bucket_exists
+    ? 'limeGreen'
+    : 'red';
+  let uploadState = 'no upload yet';
+  let uploadColor = 'grey';
+  if (status.last_upload) {
+    if (status.last_upload.ok) {
+      uploadState = `ok: ${status.last_upload.key}`;
+      uploadColor = 'limeGreen';
+    } else {
+      uploadState = `failed: ${status.last_upload.key} (${status.last_upload.error})`;
+      uploadColor = 'red';
+    }
+  }
+  return (
+    <Paper
+      style={{ padding: '10px', marginTop: '10px' }}
+      data-testid="storage-status-panel"
+    >
+      <Typography variant="subtitle2">Storage status</Typography>
+      <Typography variant="caption">
+        <div>
+          Client source: <b>{status.client_source}</b>{' '}
+          {status.client_cached ? '(cached)' : '(not yet built)'}
+        </div>
+        <div>
+          Bucket <code>{status.bucket}</code>:{' '}
+          <b style={{ color: bucketColor }}>{bucketState}</b>
+        </div>
+        <div>
+          Last upload:{' '}
+          <b style={{ color: uploadColor }}>{uploadState}</b>
+          {status.last_upload && status.last_upload.at ? (
+            <span> at {status.last_upload.at}</span>
+          ) : null}
+        </div>
+      </Typography>
+    </Paper>
+  );
+}
 
 function UploadCard(props) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [data, setData] = useState([]);
   const [error, setError] = useState(null);
+  const [status, setStatus] = useState(null);
   const { classes } = props;
+
+  const fetchStatus = () => {
+    fetch('api/v1/files/status')
+      .then((res) => res.json())
+      .then(
+        (result) => setStatus(result),
+        () => setStatus(null)
+      );
+  };
 
   const fetchBucketFiles = () => {
     fetch('api/v1/files')
@@ -37,7 +106,10 @@ function UploadCard(props) {
       );
   };
 
-  useEffect(() => fetchBucketFiles(), []);
+  useEffect(() => {
+    fetchBucketFiles();
+    fetchStatus();
+  }, []);
 
   const submitFile = async (e) => {
     e.preventDefault();
@@ -53,6 +125,7 @@ function UploadCard(props) {
         body: formData,
       });
       fetchBucketFiles();
+      fetchStatus();
     } catch (error) {
       alert(error);
     }
@@ -117,6 +190,8 @@ function UploadCard(props) {
           </Button>
         </Box>
       </form>
+
+      <StatusPanel status={status} />
 
       {data ? (
         <Box display="flex" flexDirection="row" justifyContent="center">
